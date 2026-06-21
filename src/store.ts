@@ -82,18 +82,15 @@ export const COOK_SPEC_GROUPS: Record<string, SpecGroup[]> = {
   hamburger: [
     { label: 'Doneness', options: ['Rare', 'Medium Rare', 'Medium', 'Medium Well', 'Well Done'] },
     { label: 'Bun', options: ['With Bun', 'No Bun'] },
-    { label: 'Toppings', options: ['Lettuce', 'Tomato', 'Onion', 'Pickles', 'Ketchup', 'Mustard', 'Mayo'], multi: true },
   ],
   cheeseburger: [
     { label: 'Doneness', options: ['Rare', 'Medium Rare', 'Medium', 'Medium Well', 'Well Done'] },
     { label: 'Bun', options: ['With Bun', 'No Bun'] },
     { label: 'Cheese', options: ['American', 'Cheddar', 'Swiss', 'Extra Cheese'] },
-    { label: 'Toppings', options: ['Lettuce', 'Tomato', 'Onion', 'Pickles', 'Ketchup', 'Mustard', 'Mayo'], multi: true },
   ],
   'hot dog': [
     { label: 'Style', options: ['Standard', 'Char Grilled', 'Butterflied'] },
     { label: 'Bun', options: ['With Bun', 'No Bun'] },
-    { label: 'Toppings', options: ['Ketchup', 'Mustard', 'Relish', 'Onions', 'Sauerkraut'], multi: true },
   ],
   corn: [
     { label: 'Method', options: ['In Husk', 'Husked & Foil', 'Direct Grill'] },
