@@ -1,4 +1,4 @@
-import { getCookTime, type AppState, type Order } from '../store'
+import { DONENESS_TEMPS, type AppState, type Order } from '../store'
 
 interface Props {
   state: AppState
@@ -111,15 +111,21 @@ function KitchenCard({ order, onStatus }: { order: Order; onStatus: (s: Order['s
           <div key={person.id} className="mb-4 last:mb-0">
             <p className="text-xs text-gray-500 uppercase tracking-widest font-display mb-1">{person.name}</p>
             {person.food.map((f, i) => {
-              const cookTime = getCookTime(f.name)
+              const specs = f.cookSpecs ?? []
+              const doneness = specs.find(s => DONENESS_TEMPS[s])
+              const temp = doneness ? DONENESS_TEMPS[doneness] : null
+              const otherSpecs = specs.filter(s => !DONENESS_TEMPS[s])
               return (
-                <div key={i} className="ml-2 mb-1">
-                  <span className="text-white font-display">{f.quantity}× {f.name}</span>
-                  {f.cookSpec && (
-                    <span className="ml-2 text-amber-400 text-sm">— {f.cookSpec}</span>
-                  )}
-                  {f.notes && <span className="ml-2 text-gray-400 text-sm italic">({f.notes})</span>}
-                  {cookTime && <p className="text-xs text-gray-600 ml-3">⏱ {cookTime}</p>}
+                <div key={i} className="ml-2 mb-2">
+                  <div className="flex flex-wrap items-baseline gap-2">
+                    <span className="text-white font-display">{f.quantity}× {f.name}</span>
+                    {doneness && <span className="text-amber-400 text-sm font-medium">{doneness}</span>}
+                    {temp && <span className="text-amber-300 text-xs">({temp})</span>}
+                    {otherSpecs.map(s => (
+                      <span key={s} className="text-gray-300 text-xs bg-gray-800 rounded-full px-2 py-0.5">{s}</span>
+                    ))}
+                  </div>
+                  {f.notes && <p className="text-gray-400 text-xs italic ml-1 mt-0.5">{f.notes}</p>}
                 </div>
               )
             })}

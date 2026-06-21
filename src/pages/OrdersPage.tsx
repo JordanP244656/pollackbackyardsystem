@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { uid, getCookSpecs, getCookTime, type AppState, type Order, type Person, type OrderItem } from '../store'
+import { uid, getSpecGroups, DONENESS_TEMPS, type AppState, type Order, type Person, type OrderItem } from '../store'
 
 interface Props {
   state: AppState
@@ -70,7 +70,7 @@ export default function OrdersPage({ state, setState }: Props) {
         .sub { font-style: italic; letter-spacing: 0.2em; font-size: 12px; margin-bottom: 24px; }
         .person { margin: 20px 0; text-align: left; border-top: 1px solid #ddd; padding-top: 12px; }
         .person h3 { font-size: 18px; margin-bottom: 8px; }
-        .item { display: flex; justify-content: space-between; font-size: 14px; margin: 4px 0; }
+        .item { font-size: 14px; margin: 4px 0; }
         .spec { font-size: 12px; color: #666; margin-left: 8px; font-style: italic; }
         .footer { margin-top: 32px; font-style: italic; font-size: 12px; color: #999; }
       </style></head><body>`)
@@ -78,12 +78,12 @@ export default function OrdersPage({ state, setState }: Props) {
     for (const p of order.people) {
       w.document.write(`<div class="person"><h3>${p.name}</h3>`)
       for (const f of p.food) {
-        w.document.write(`<div class="item"><span>${f.quantity}× ${f.name}</span></div>`)
-        if (f.cookSpec) w.document.write(`<div class="spec">Cook: ${f.cookSpec}</div>`)
+        w.document.write(`<div class="item">${f.quantity}× ${f.name}</div>`)
+        if (f.cookSpecs?.length) w.document.write(`<div class="spec">${f.cookSpecs.join(' · ')}</div>`)
         if (f.notes) w.document.write(`<div class="spec">Notes: ${f.notes}</div>`)
       }
       for (const d of p.drinks) {
-        w.document.write(`<div class="item"><span>${d.quantity}× ${d.name}</span></div>`)
+        w.document.write(`<div class="item">${d.quantity}× ${d.name}</div>`)
         if (d.notes) w.document.write(`<div class="spec">Notes: ${d.notes}</div>`)
       }
       w.document.write('</div>')
@@ -95,7 +95,6 @@ export default function OrdersPage({ state, setState }: Props) {
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
-      {/* Order picker */}
       <div className="flex gap-2 flex-wrap mb-6 items-center no-print">
         {state.orders.map(o => (
           <button
@@ -149,10 +148,7 @@ export default function OrdersPage({ state, setState }: Props) {
   )
 }
 
-function OrderEditor({
-  order, foodItems, drinkItems,
-  onAddPerson, onRemovePerson, onUpdatePerson, onDelete, onPrint
-}: {
+function OrderEditor({ order, foodItems, drinkItems, onAddPerson, onRemovePerson, onUpdatePerson, onDelete, onPrint }: {
   order: Order
   foodItems: string[]
   drinkItems: string[]
@@ -212,9 +208,7 @@ function OrderEditor({
   )
 }
 
-function PersonCard({
-  person, foodItems, drinkItems, expanded, onToggle, onUpdate, onRemove
-}: {
+function PersonCard({ person, foodItems, drinkItems, expanded, onToggle, onUpdate, onRemove }: {
   person: Person
   foodItems: string[]
   drinkItems: string[]
@@ -224,32 +218,36 @@ function PersonCard({
   onRemove: () => void
 }) {
   function addFood(name: string) {
-    const specs = getCookSpecs(name)
-    const item: OrderItem = { menuItemId: name, name, quantity: 1, cookSpec: specs[0] ?? '' }
+    const item: OrderItem = { menuItemId: name, name, quantity: 1, cookSpecs: [] }
     onUpdate({ ...person, food: [...person.food, item] })
   }
 
   function addDrink(name: string) {
-    const item: OrderItem = { menuItemId: name, name, quantity: 1 }
+    const item: OrderItem = { menuItemId: name, name, quantity: 1, cookSpecs: [] }
     onUpdate({ ...person, drinks: [...person.drinks, item] })
   }
 
   function updateFoodItem(idx: number, patch: Partial<OrderItem>) {
-    const food = person.food.map((f, i) => i === idx ? { ...f, ...patch } : f)
-    onUpdate({ ...person, food })
+    onUpdate({ ...person, food: person.food.map((f, i) => i === idx ? { ...f, ...patch } : f) })
   }
 
   function updateDrinkItem(idx: number, patch: Partial<OrderItem>) {
-    const drinks = person.drinks.map((d, i) => i === idx ? { ...d, ...patch } : d)
-    onUpdate({ ...person, drinks })
+    onUpdate({ ...person, drinks: person.drinks.map((d, i) => i === idx ? { ...d, ...patch } : d) })
   }
 
-  function removeFood(idx: number) {
-    onUpdate({ ...person, food: person.food.filter((_, i) => i !== idx) })
-  }
-
-  function removeDrink(idx: number) {
-    onUpdate({ ...person, drinks: person.drinks.filter((_, i) => i !== idx) })
+  function toggleSpec(idx: number, spec: string, groupMulti: boolean, groupOptions: string[]) {
+    const f = person.food[idx]
+    const current = f.cookSpecs ?? []
+    let next: string[]
+    if (current.includes(spec)) {
+      next = current.filter(s => s !== spec)
+    } else if (groupMulti) {
+      next = [...current, spec]
+    } else {
+      // single-select within group: remove any other option from same group, add this
+      next = [...current.filter(s => !groupOptions.includes(s)), spec]
+    }
+    updateFoodItem(idx, { cookSpecs: next })
   }
 
   const summary = [
@@ -267,7 +265,7 @@ function PersonCard({
           <span className="font-display text-lg text-gray-800">{person.name}</span>
           {summary && <span className="text-xs text-gray-400 ml-3 font-display">{summary}</span>}
         </div>
-        <span className="text-gray-400">{expanded ? '▲' : '▼'}</span>
+        <span className="text-gray-400 text-sm">{expanded ? '▲' : '▼'}</span>
       </button>
 
       {expanded && (
@@ -276,50 +274,59 @@ function PersonCard({
           <div>
             <p className="text-xs font-display tracking-widest uppercase text-gray-400 mb-2">Food</p>
             {person.food.map((f, idx) => {
-              const specs = getCookSpecs(f.name)
-              const cookTime = getCookTime(f.name)
+              const groups = getSpecGroups(f.name)
+              const selected = f.cookSpecs ?? []
+              // find selected doneness temp
+              const selectedDoneness = selected.find(s => DONENESS_TEMPS[s])
               return (
-                <div key={idx} className="mb-3 bg-gray-50 rounded p-3">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="font-display text-gray-800">{f.name}</span>
+                <div key={idx} className="mb-3 bg-gray-50 rounded-lg p-3">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="font-display text-gray-800 font-medium">{f.name}</span>
                     <input
-                      type="number"
-                      min="1"
-                      value={f.quantity}
+                      type="number" min="1" value={f.quantity}
                       onChange={e => updateFoodItem(idx, { quantity: parseInt(e.target.value) || 1 })}
                       className="border border-gray-200 rounded px-2 py-0.5 text-xs w-14 outline-none"
                     />
-                    <button onClick={() => removeFood(idx)} className="text-red-400 text-xs ml-auto">✕</button>
+                    {selectedDoneness && (
+                      <span className="text-xs text-amber-600 font-medium ml-1">
+                        {DONENESS_TEMPS[selectedDoneness]}
+                      </span>
+                    )}
+                    <button onClick={() => onUpdate({ ...person, food: person.food.filter((_, i) => i !== idx) })} className="text-red-400 text-xs ml-auto">✕</button>
                   </div>
-                  {cookTime && <p className="text-xs text-gray-400 italic mb-2">⏱ {cookTime}</p>}
-                  {specs.length > 0 && (
-                    <div className="mb-2">
-                      <p className="text-xs text-gray-400 mb-1">Cook style:</p>
-                      <div className="flex flex-wrap gap-1">
-                        {specs.map(s => (
-                          <button
-                            key={s}
-                            onClick={() => updateFoodItem(idx, { cookSpec: s })}
-                            className={`text-xs px-2 py-0.5 rounded-full border transition-colors ${f.cookSpec === s ? 'bg-gray-900 text-white border-gray-900' : 'border-gray-300 text-gray-600 hover:border-gray-500'}`}
-                          >
-                            {s}
-                          </button>
-                        ))}
+
+                  {groups.map(group => (
+                    <div key={group.label} className="mb-2">
+                      <p className="text-xs text-gray-400 mb-1">{group.label}:</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {group.options.map(opt => {
+                          const active = selected.includes(opt)
+                          return (
+                            <button
+                              key={opt}
+                              onClick={() => toggleSpec(idx, opt, !!group.multi, group.options)}
+                              className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${active ? 'bg-gray-900 text-white border-gray-900' : 'border-gray-300 text-gray-600 hover:border-gray-500 bg-white'}`}
+                            >
+                              {opt}
+                            </button>
+                          )
+                        })}
                       </div>
                     </div>
-                  )}
+                  ))}
+
                   <input
                     value={f.notes ?? ''}
                     onChange={e => updateFoodItem(idx, { notes: e.target.value })}
                     placeholder="Special notes..."
-                    className="border border-gray-200 rounded px-2 py-1 text-xs w-full outline-none focus:border-gray-400"
+                    className="border border-gray-200 rounded px-2 py-1 text-xs w-full outline-none focus:border-gray-400 bg-white mt-1"
                   />
                 </div>
               )
             })}
             <select
               onChange={e => { if (e.target.value) addFood(e.target.value); e.target.value = '' }}
-              className="border border-dashed border-gray-300 rounded px-3 py-1.5 text-sm text-gray-500 w-full outline-none"
+              className="border border-dashed border-gray-300 rounded px-3 py-1.5 text-sm text-gray-500 w-full outline-none bg-white"
               defaultValue=""
             >
               <option value="" disabled>+ Add food item</option>
@@ -334,9 +341,7 @@ function PersonCard({
               <div key={idx} className="mb-2 flex items-center gap-2 bg-gray-50 rounded p-2">
                 <span className="font-display text-gray-800 text-sm flex-1">{d.name}</span>
                 <input
-                  type="number"
-                  min="1"
-                  value={d.quantity}
+                  type="number" min="1" value={d.quantity}
                   onChange={e => updateDrinkItem(idx, { quantity: parseInt(e.target.value) || 1 })}
                   className="border border-gray-200 rounded px-2 py-0.5 text-xs w-14 outline-none"
                 />
@@ -346,12 +351,12 @@ function PersonCard({
                   placeholder="Notes"
                   className="border border-gray-200 rounded px-2 py-0.5 text-xs w-28 outline-none"
                 />
-                <button onClick={() => removeDrink(idx)} className="text-red-400 text-xs">✕</button>
+                <button onClick={() => onUpdate({ ...person, drinks: person.drinks.filter((_, i) => i !== idx) })} className="text-red-400 text-xs">✕</button>
               </div>
             ))}
             <select
               onChange={e => { if (e.target.value) addDrink(e.target.value); e.target.value = '' }}
-              className="border border-dashed border-gray-300 rounded px-3 py-1.5 text-sm text-gray-500 w-full outline-none"
+              className="border border-dashed border-gray-300 rounded px-3 py-1.5 text-sm text-gray-500 w-full outline-none bg-white"
               defaultValue=""
             >
               <option value="" disabled>+ Add drink</option>
@@ -359,7 +364,9 @@ function PersonCard({
             </select>
           </div>
 
-          <button onClick={onRemove} className="text-xs text-red-400 hover:text-red-600">Remove {person.name} from order</button>
+          <button onClick={onRemove} className="text-xs text-red-400 hover:text-red-600">
+            Remove {person.name} from order
+          </button>
         </div>
       )}
     </div>

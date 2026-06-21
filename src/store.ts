@@ -12,7 +12,7 @@ export interface OrderItem {
   menuItemId: string
   name: string
   quantity: number
-  cookSpec?: string  // e.g. "medium rare", "with bun", "buttered"
+  cookSpecs: string[]  // multi-select across all spec groups
   notes?: string
 }
 
@@ -71,33 +71,61 @@ export function uid() {
   return Math.random().toString(36).slice(2) + Date.now().toString(36)
 }
 
-// Cook time / spec suggestions per item name keywords
-export const COOK_SPECS: Record<string, string[]> = {
-  hamburger: ['Rare', 'Medium Rare', 'Medium', 'Medium Well', 'Well Done', 'With Bun', 'No Bun'],
-  cheeseburger: ['Rare', 'Medium Rare', 'Medium', 'Medium Well', 'Well Done', 'With Bun', 'No Bun', 'Extra Cheese'],
-  'hot dog': ['Standard (~5 min)', 'Char Grilled', 'With Bun', 'No Bun', 'Ketchup & Mustard', 'Just Mustard'],
-  corn: ['Husked on Grill (~15 min)', 'In Husk (~20 min)', 'Buttered', 'Plain', 'Salt & Pepper'],
+// Groups of spec chips — each group is independent (multi-select across groups, single-select within)
+export interface SpecGroup {
+  label: string
+  options: string[]
+  multi?: boolean // if true, can pick multiple within this group too
 }
 
-export function getCookSpecs(name: string): string[] {
+export const COOK_SPEC_GROUPS: Record<string, SpecGroup[]> = {
+  hamburger: [
+    { label: 'Doneness', options: ['Rare', 'Medium Rare', 'Medium', 'Medium Well', 'Well Done'] },
+    { label: 'Bun', options: ['With Bun', 'No Bun'] },
+    { label: 'Toppings', options: ['Lettuce', 'Tomato', 'Onion', 'Pickles', 'Ketchup', 'Mustard', 'Mayo'], multi: true },
+  ],
+  cheeseburger: [
+    { label: 'Doneness', options: ['Rare', 'Medium Rare', 'Medium', 'Medium Well', 'Well Done'] },
+    { label: 'Bun', options: ['With Bun', 'No Bun'] },
+    { label: 'Cheese', options: ['American', 'Cheddar', 'Swiss', 'Extra Cheese'] },
+    { label: 'Toppings', options: ['Lettuce', 'Tomato', 'Onion', 'Pickles', 'Ketchup', 'Mustard', 'Mayo'], multi: true },
+  ],
+  'hot dog': [
+    { label: 'Style', options: ['Standard', 'Char Grilled', 'Butterflied'] },
+    { label: 'Bun', options: ['With Bun', 'No Bun'] },
+    { label: 'Toppings', options: ['Ketchup', 'Mustard', 'Relish', 'Onions', 'Sauerkraut'], multi: true },
+  ],
+  corn: [
+    { label: 'Method', options: ['In Husk', 'Husked & Foil', 'Direct Grill'] },
+    { label: 'Seasoning', options: ['Buttered', 'Plain', 'Salt & Pepper', 'Elote Style'], multi: true },
+  ],
+}
+
+export function getSpecGroups(name: string): SpecGroup[] {
   const lower = name.toLowerCase()
-  for (const key of Object.keys(COOK_SPECS)) {
-    if (lower.includes(key)) return COOK_SPECS[key]
+  for (const key of Object.keys(COOK_SPEC_GROUPS)) {
+    if (lower.includes(key)) return COOK_SPEC_GROUPS[key]
   }
   return []
 }
 
-export const COOK_TIMES: Record<string, string> = {
-  hamburger: '~8–10 min total (flip at 4–5 min)',
-  cheeseburger: '~8–10 min total, add cheese last minute',
-  'hot dog': '~5 min, turning frequently',
-  corn: '~15–20 min on grill, turning every 5 min',
+// Internal temp for doneness levels
+export const DONENESS_TEMPS: Record<string, string> = {
+  'Rare': '125°F internal',
+  'Medium Rare': '135°F internal',
+  'Medium': '145°F internal',
+  'Medium Well': '155°F internal',
+  'Well Done': '160°F internal',
 }
 
-export function getCookTime(name: string): string | null {
-  const lower = name.toLowerCase()
-  for (const key of Object.keys(COOK_TIMES)) {
-    if (lower.includes(key)) return COOK_TIMES[key]
-  }
+export function getGrillGuide(_name: string): string | null {
   return null
+}
+
+// Keep getCookSpecs/getCookTime as shims so KitchenPage still compiles
+export function getCookSpecs(name: string): string[] {
+  return getSpecGroups(name).flatMap(g => g.options)
+}
+export function getCookTime(name: string): string | null {
+  return getGrillGuide(name)
 }
